@@ -25,6 +25,8 @@ import json
 import copy
 from shutil import rmtree
 
+from types import FunctionType
+
 inkscape = 'inkscape'
 if sys.platform == 'darwin':
     inkscape = '/Applications/Inkscape.app/Contents/Resources/bin/inkscape'
@@ -39,16 +41,12 @@ from IPython.nbformat.v3.nbjson import BytesEncoder
 from IPython.utils import path, py3compat
 
 # local
-from decorators import DocInherit
 from lexers import IPythonLexer
 
 
 #-----------------------------------------------------------------------------
 # Utility functions
 #-----------------------------------------------------------------------------
-
-def DocInherit(f):
-    return f
 
 def remove_fake_files_url(cell):
     """Remove from the cell source the /files/ pseudo-path we use.
@@ -229,8 +227,27 @@ def coalesce_streams(outputs):
 class ConversionException(Exception):
     pass
 
+class DocStringInheritor(type):
+    """
+    http://groups.google.com/group/comp.lang.python/msg/26f7b4fcb4d66c95
+    by Paul McGuire
+    """
+    def __new__(meta, classname, bases, classDict):
+        newClassDict = {}
+        for attributeName, attribute in classDict.items():
+            if type(attribute) == FunctionType:
+                # look through bases for matching function by name
+                for baseclass in bases:
+                    if hasattr(baseclass, attributeName):
+                        basefn = getattr(baseclass,attributeName)
+                        if basefn.__doc__:
+                            attribute.__doc__ = basefn.__doc__
+                            break
+            newClassDict[attributeName] = attribute
+        return type.__new__(meta, classname, bases, newClassDict)
 
 class Converter(object):
+    __metaclass__ = DocStringInheritor
     default_encoding = 'utf-8'
     extension = str()
     figures_counter = 0
@@ -471,12 +488,10 @@ class ConverterRST(Converter):
     extension = 'rst'
     heading_level = {1: '=', 2: '-', 3: '`', 4: '\'', 5: '.', 6: '~'}
 
-    @DocInherit
     def render_heading(self, cell):
         marker = self.heading_level[cell.level]
         return ['{0}\n{1}\n'.format(cell.source, marker * len(cell.source))]
 
-    @DocInherit
     def render_code(self, cell):
         if not cell.input:
             return []
@@ -490,19 +505,16 @@ class ConverterRST(Converter):
 
         return lines
 
-    @DocInherit
     def render_markdown(self, cell):
         #return [cell.source]
         return [markdown2rst(cell.source)]
 
-    @DocInherit
     def render_raw(self, cell):
         if self.raw_as_verbatim:
             return ['::', '', indent(cell.source), '']
         else:
             return [cell.source]
 
-    @DocInherit
     def render_pyout(self, output):
         lines = ['Out[%s]:' % output.prompt_number, '']
 
@@ -515,37 +527,29 @@ class ConverterRST(Converter):
 
         return lines
 
-    @DocInherit
     def render_pyerr(self, output):
         # Note: a traceback is a *list* of frames.
         return ['::', '', indent(remove_ansi('\n'.join(output.traceback))), '']
 
-    @DocInherit
     def _img_lines(self, img_file):
         return ['.. image:: %s' % img_file, '']
     
-    @DocInherit
     def render_display_format_text(self, output):
         return rst_directive('.. parsed-literal::', output.text)
 
-    @DocInherit
     def _unknown_lines(self, data):
         return rst_directive('.. warning:: Unknown cell') + [data]
 
-    @DocInherit
     def render_display_format_html(self, output):
         return rst_directive('.. raw:: html', output.html)
 
-    @DocInherit
     def render_display_format_latex(self, output):
         return rst_directive('.. math::', output.latex)
 
-    @DocInherit
     def render_display_format_json(self, output):
         return rst_directive('.. raw:: json', output.json)
 
 
-    @DocInherit
     def render_display_format_javascript(self, output):
         return rst_directive('.. raw:: javascript', output.javascript)
 
@@ -577,11 +581,9 @@ class ConverterMarkdown(Converter):
         self.show_prompts = show_prompts
         self.inline_prompt = inline_prompt
 
-    @DocInherit
     def render_heading(self, cell):
         return ['{0} {1}'.format('#'*cell.level, cell.source), '']
 
-    @DocInherit
     def render_code(self, cell):
         if not cell.input:
             return []
@@ -606,18 +608,15 @@ class ConverterMarkdown(Converter):
         lines.append('')
         return lines
 
-    @DocInherit
     def render_markdown(self, cell):
         return [cell.source, '']
 
-    @DocInherit
     def render_raw(self, cell):
         if self.raw_as_verbatim:
             return [indent(cell.source), '']
         else:
             return [cell.source, '']
 
-    @DocInherit
     def render_pyout(self, output):
         lines = []
         
@@ -634,36 +633,28 @@ class ConverterMarkdown(Converter):
         lines.append('')
         return lines
 
-    @DocInherit
     def render_pyerr(self, output):
         # Note: a traceback is a *list* of frames.
         return [indent(remove_ansi('\n'.join(output.traceback))), '']
 
-    @DocInherit
     def _img_lines(self, img_file):
         return ['', '![](%s)' % img_file, '']
     
-    @DocInherit
     def render_display_format_text(self, output):
         return [indent(output.text)]
 
-    @DocInherit
     def _unknown_lines(self, data):
         return ['Warning: Unknown cell', data]
 
-    @DocInherit
     def render_display_format_html(self, output):
         return [output.html]
 
-    @DocInherit
     def render_display_format_latex(self, output):
         return ['LaTeX::', indent(output.latex)]
 
-    @DocInherit
     def render_display_format_json(self, output):
         return ['JSON:', indent(output.json)]
 
-    @DocInherit
     def render_display_format_javascript(self, output):
         return ['JavaScript:', indent(output.javascript)]
 
@@ -778,13 +769,11 @@ class ConverterHTML(Converter):
         ])
         return lines
 
-    @DocInherit
     @text_cell
     def render_heading(self, cell):
         marker = cell.level
         return [u'<h{1}>\n  {0}\n</h{1}>'.format(cell.source, marker)]
     
-    @DocInherit
     def render_code(self, cell):
         if not cell.input:
             return []
@@ -814,21 +803,18 @@ class ConverterHTML(Converter):
         
         return lines
 
-    @DocInherit
     @text_cell
     def render_markdown(self, cell):
         p = subprocess.Popen(['markdown'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         out, _ = p.communicate(cell.source.encode('utf-8'))
         return [out.decode('utf-8')]
 
-    @DocInherit
     def render_raw(self, cell):
         if self.raw_as_verbatim:
             return self.in_tag('pre', cell.source)
         else:
             return [cell.source]
 
-    @DocInherit
     @output_container
     def render_pyout(self, output):
         for fmt in ['html', 'latex', 'png', 'jpeg', 'svg', 'text']:
@@ -839,13 +825,11 @@ class ConverterHTML(Converter):
 
     render_display_data = render_pyout
 
-    @DocInherit
     @output_container
     def render_stream(self, output):
         return self._ansi_colored(output.text)
     
 
-    @DocInherit
     @output_container
     def render_pyerr(self, output):
         # Note: a traceback is a *list* of frames.
@@ -854,243 +838,41 @@ class ConverterHTML(Converter):
         # stb = 
         return self._ansi_colored('\n'.join(output.traceback))
 
-    @DocInherit
     def _img_lines(self, img_file):
         return ['<img src="%s">' % img_file, '</img>']
 
-    @DocInherit
     def _unknown_lines(self, data):
         return ['<h2>Warning:: Unknown cell</h2>'] + self.in_tag('pre', data)
 
 
-    @DocInherit
     def render_display_format_png(self, output):
         return ['<img src="data:image/png;base64,%s"></img>' % output.png]
 
-    @DocInherit
     def render_display_format_svg(self, output):
         return [output.svg]
 
-    @DocInherit
     def render_display_format_jpeg(self, output):
         return ['<img src="data:image/jpeg;base64,%s"></img>' % output.jpeg]
 
-    @DocInherit
     def render_display_format_text(self, output):
         return self._ansi_colored(output.text)
 
-    @DocInherit
     def render_display_format_html(self, output):
         return [output.html]
 
-    @DocInherit
     def render_display_format_latex(self, output):
         return [output.latex]
 
-    @DocInherit
     def render_display_format_json(self, output):
         # html ignores json
         return []
 
 
-    @DocInherit
     def render_display_format_javascript(self, output):
         return [output.javascript]
 
 
 class ConverterLaTeX(Converter):
-    """Converts a notebook to a .tex file suitable for pdflatex.
-
-    Note: this converter *needs*:
-
-    - `pandoc`: for all conversion of markdown cells.  If your notebook only
-       has Raw cells, pandoc will not be needed.
-    
-    -  `inkscape`: if your notebook has SVG figures.  These need to be
-       converted to PDF before inclusion in the TeX file, as LaTeX doesn't
-       understand SVG natively.
-    
-    You will in general obtain much better final PDF results if you configure
-    the matplotlib backend to create SVG output with 
-
-    %config InlineBackend.figure_format = 'svg'
-
-    (or set the equivalent flag at startup or in your configuration profile).
-    """
-    extension = 'tex'
-    documentclass = 'article'
-    documentclass_options = '11pt,english'
-    heading_map = {1: r'\section',
-                   2: r'\subsection',
-                   3: r'\subsubsection',
-                   4: r'\paragraph',
-                   5: r'\subparagraph',
-                   6: r'\subparagraph'}
-
-    def in_env(self, environment, lines):
-        """Return list of environment lines for input lines
-
-        Parameters
-        ----------
-        env : string
-          Name of the environment to bracket with begin/end.
-
-        lines: """
-        out = [ur'\begin{%s}' % environment]
-        if isinstance(lines, basestring):
-            out.append(lines)
-        else:  # list
-            out.extend(lines)
-        out.append(ur'\end{%s}' % environment)
-        return out
-
-    def convert(self):
-        # The main body is done by the logic in the parent class, and that's
-        # all we need if preamble support has been turned off.
-        body = super(ConverterLaTeX, self).convert()
-        if not self.with_preamble:
-            return body
-        # But if preamble is on, then we need to construct a proper, standalone
-        # tex file.
-        
-        # Tag the document at the top and set latex class
-        final = [ r'%% This file was auto-generated by IPython, do NOT edit',
-                  r'%% Conversion from the original notebook file:',
-                  r'%% {0}'.format(self.infile),
-                  r'%%',
-                  r'\documentclass[%s]{%s}' % (self.documentclass_options,
-                                               self.documentclass),
-                  '',
-                 ]
-        # Load our own preamble, which is stored next to the main file.  We
-        # need to be careful in case the script entry point is a symlink
-        myfile = __file__ if not os.path.islink(__file__) else \
-          os.readlink(__file__)
-        with open(os.path.join(os.path.dirname(myfile), 'preamble.tex')) as f:
-            final.append(f.read())
-            
-        # Load any additional user-supplied preamble
-        if self.user_preamble:
-            final.extend(['', '%% Adding user preamble from file:',
-                          '%% {0}'.format(self.user_preamble), ''])
-            with open(self.user_preamble) as f:
-                final.append(f.read())
-                
-        # Include document body
-        final.extend([ r'\begin{document}', '',
-                       body,
-                       r'\end{document}', ''])
-        # Retun value must be a string
-        return '\n'.join(final)
-        
-    @DocInherit
-    def render_heading(self, cell):
-        marker = self.heading_map[cell.level]
-        return ['%s{%s}' % (marker, cell.source) ]
-
-    @DocInherit
-    def render_code(self, cell):
-        if not cell.input:
-            return []
-
-        # Cell codes first carry input code, we use lstlisting for that
-        lines = [ur'\begin{codecell}']
-        
-        lines.extend(self.in_env('codeinput',
-                              self.in_env('lstlisting', cell.input)))
-
-        outlines = []
-        for output in cell.outputs:
-            conv_fn = self.dispatch(output.output_type)
-            outlines.extend(conv_fn(output))
-
-        # And then output of many possible types; use a frame for all of it.
-        if outlines:
-            lines.extend(self.in_env('codeoutput', outlines))
-
-        lines.append(ur'\end{codecell}')
-
-        return lines
-
-
-    @DocInherit
-    def _img_lines(self, img_file):
-        return self.in_env('center',
-                [r'\includegraphics[width=6in]{%s}' % img_file, r'\par'])
-
-    def _svg_lines(self, img_file):
-        base_file = os.path.splitext(img_file)[0]
-        pdf_file = base_file + '.pdf'
-        subprocess.check_call([ inkscape, '--export-pdf=%s' % pdf_file,
-                               img_file])
-        return self._img_lines(pdf_file)
-
-    @DocInherit
-    def render_markdown(self, cell):
-        return [markdown2latex(cell.source)]
-        
-    @DocInherit
-    def render_pyout(self, output):
-        lines = []
-
-        # output is a dictionary like object with type as a key
-        if 'latex' in output:
-            lines.extend(output.latex)
-
-        if 'text' in output:
-            lines.extend(self.in_env('verbatim', output.text))
-
-        return lines
-
-    @DocInherit
-    def render_pyerr(self, output):
-        # Note: a traceback is a *list* of frames.
-        return self.in_env('traceback',
-                        self.in_env('verbatim', 
-                                 remove_ansi('\n'.join(output.traceback))))
-
-    @DocInherit
-    def render_raw(self, cell):
-        if self.raw_as_verbatim:
-            return self.in_env('verbatim', cell.source)
-        else:
-            return [cell.source]
-
-    @DocInherit
-    def _unknown_lines(self, data):
-        return [r'{\vspace{5mm}\bf WARNING:: unknown cell:}'] + \
-          self.in_env('verbatim', data)
-
-
-    @DocInherit
-    def render_display_format_text(self, output):
-        lines = []
-
-        if 'text' in output:
-            lines.extend(self.in_env('verbatim', output.text.strip()))
-
-        return lines
-
-    @DocInherit
-    def render_display_format_html(self, output):
-        return []
-
-    @DocInherit
-    def render_display_format_latex(self, output):
-        if type(output.latex) == type([]):
-            return output.latex
-        return [output.latex]
-
-    @DocInherit
-    def render_display_format_json(self, output):
-        # latex ignores json
-        return []
-
-
-    @DocInherit
-    def render_display_format_javascript(self, output):
-        # latex ignores javascript
-        return []
 
 class ConverterNotebook(Converter):
     """
@@ -1136,48 +918,37 @@ class ConverterNotebook(Converter):
 }"""
         return s.split('\n')
 
-    @DocInherit
     def render_heading(self, cell):
         return cell_to_lines(cell)
 
-    @DocInherit
     def render_code(self, cell):
         return cell_to_lines(cell)
 
-    @DocInherit
     def render_markdown(self, cell):
         return cell_to_lines(cell)
 
-    @DocInherit
     def render_raw(self, cell):
         return cell_to_lines(cell)
 
-    @DocInherit
     def render_pyout(self, output):
         return cell_to_lines(output)
 
-    @DocInherit
     def render_pyerr(self, output):
         return cell_to_lines(output)
 
-    @DocInherit
     def render_display_format_text(self, output):
         return [output.text]
 
-    @DocInherit
     def render_display_format_html(self, output):
         return [output.html]
 
-    @DocInherit
     def render_display_format_latex(self, output):
         return [output.latex]
 
-    @DocInherit
     def render_display_format_json(self, output):
         return [output.json]
 
 
-    @DocInherit
     def render_display_format_javascript(self, output):
         return [output.javascript]
 
