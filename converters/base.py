@@ -90,7 +90,7 @@ class Converter(object):
     # they have specific requirements.
     display_data_priority = ['pdf', 'svg', 'png', 'jpg', 'text']
 
-    def __init__(self, infile):
+    def __init__(self, infile, outfile=None, stdout=False):
         self.infile = infile
         self.infile_dir, infile_root = os.path.split(infile)
         infile_root = os.path.splitext(infile_root)[0]
@@ -101,6 +101,8 @@ class Converter(object):
         self.infile_root = infile_root
         self.files_dir = files_dir
         self.outbase = os.path.join(self.infile_dir, infile_root)
+        self.outfile = outfile
+        self.stdout = stdout
 
     def __del__(self):
         if os.path.isdir(self.files_dir) and not os.listdir(self.files_dir):
@@ -164,7 +166,10 @@ class Converter(object):
             self.read()
         self.output = self.convert()
         assert(type(self.output) == unicode)
-        return self.save()
+        if self.stdout:
+            print(self.output.encode(self.default_encoding))
+            return
+        return self.save(self.outfile)
 
     def read(self):
         "read and parse notebook into NotebookNode called self.nb"

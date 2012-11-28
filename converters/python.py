@@ -20,8 +20,8 @@ class ConverterPy(Converter):
     """
     extension = 'py'
 
-    def __init__(self, infile, show_prompts=True, show_output=True):
-        super(ConverterPy, self).__init__(infile)
+    def __init__(self, infile, show_prompts=True, show_output=True, **kw):
+        super(ConverterPy, self).__init__(infile, **kw)
         self.show_prompts = show_prompts
         self.show_output = show_output
 

@@ -11,6 +11,7 @@ called nb_figure_NN.png.
 # Imports
 #-----------------------------------------------------------------------------
 from __future__ import print_function
+import sys
 
 # From IPython
 from IPython.external import argparse
@@ -45,7 +46,8 @@ known_formats = ', '.join([key + " (default)" if key == default_format else key
                            for key in converters])
 
 
-def main(infile, format='rst', preamble=None, exclude=None):
+def main(infile, format='rst', preamble=None, exclude=None, outfile=None,
+        stdout=False):
     """Convert a notebook to html in one step"""
     try:
         ConverterClass = converters[format]
@@ -53,7 +55,7 @@ def main(infile, format='rst', preamble=None, exclude=None):
         raise SystemExit("Unknown format '%s', " % format +
                          "known formats are: " + known_formats)
 
-    converter = ConverterClass(infile)
+    converter = ConverterClass(infile, outfile=outfile, stdout=stdout)
     converter.render()
 
 #-----------------------------------------------------------------------------
@@ -77,9 +79,17 @@ if __name__ == '__main__':
                         help='Path to a user-specified preamble file')
     parser.add_argument('-e', '--exclude', default='',
                         help='Comma-separated list of cells to exclude')
+    parser.add_argument('-o', '--outfile', default='',
+                        help='Path for the destination of converted output')
+    parser.add_argument('-O', '--stdout', default=False, action='store_true',
+        help='Print converted output instead of sending it to a file')
 
     args = parser.parse_args()
     exclude_cells = [s.strip() for s in args.exclude.split(',')]
+
+    if args.stdout and args.outfile:
+        sys.stderr.write("WARNING: ignoring outfile, printing to stdout\n")
         
     main(infile=args.infile[0], format=args.format,
-         preamble=args.preamble, exclude=exclude_cells)
+         preamble=args.preamble, exclude=exclude_cells, outfile=args.outfile,
+         stdout=args.stdout)
